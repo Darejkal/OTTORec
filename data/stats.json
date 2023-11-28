@@ -1,0 +1,1 @@
+{"train": {"num_sessions": 12899779, "num_events": 216716096}, "num_items": 1855596, "test": {"num_sessions": 921704, "num_events": 6178024}}

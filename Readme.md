@@ -7,3 +7,5 @@
 ## Use model
 # TODO:
 Augmentation: Genetic
+# Future:
+https://arxiv.org/pdf/2108.06625.pdf
