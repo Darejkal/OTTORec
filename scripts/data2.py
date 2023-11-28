@@ -10,7 +10,8 @@ from typing import List,Tuple
 warnings.filterwarnings('ignore')
 
 class Dataset_Custom(Dataset):
-    def __init__(self, root_path, flag='train', size=None,
+    def __init__(self, root_path, 
+                 flag='train', size=None,
                  features='S', data_path='ETTh1.csv',
                  target='OT', scale=True):
         # size [seq_len, label_len, pred_len]
@@ -52,17 +53,20 @@ class Dataset_Custom(Dataset):
         num_train = int(len(df_raw) * 0.7)
         num_test = int(len(df_raw) * 0.2)
         num_vali = len(df_raw) - num_train - num_test
+        # Divide into train, valid, test
         border1s = [0, num_train - self.seq_len, len(df_raw) - num_test - self.seq_len]
         border2s = [num_train, num_train + num_vali, len(df_raw)]
         border1 = border1s[self.set_type]
         border2 = border2s[self.set_type]
-
+        
+        # ????
         if self.features == 'M' or self.features == 'MS':
             cols_data = df_raw.columns[1:]
             df_data = df_raw[cols_data]
         elif self.features == 'S':
             df_data = df_raw[[self.target]]
 
+        # Scale t 
         if self.scale:
             train_data = df_data[border1s[0]:border2s[0]]
             self.scaler.fit(train_data.values)
@@ -162,6 +166,8 @@ class Dataset_Pred(Dataset):
 
         tmp_stamp = df_raw[['date']][border1:border2]
         tmp_stamp['date'] = pd.to_datetime(tmp_stamp.date)
+
+        # Returns the range of equally spaced time points (where the difference between any two adjacent points is specified by the given frequency) such that they all satisfy start <[=] x <[=] end,
         pred_dates = pd.date_range(tmp_stamp.date.values[-1], periods=self.pred_len + 1, freq=self.freq)
 
         df_stamp = pd.DataFrame(columns=['date'])
