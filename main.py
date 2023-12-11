@@ -94,7 +94,7 @@ def main():
                         reject_uniform_session_items=config["reject_uniform_session_items"],
                         reject_in_batch_items=config["reject_in_batch_items"],
                         sampling_style=config["sampling_style"])
-    testloader=DataLoader(trainset,
+    testloader=DataLoader(testset,
                               drop_last=True,
                               batch_size=config["batch_size"],
                               shuffle=False,
