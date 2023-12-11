@@ -15,16 +15,17 @@ class CustomTimeCount():
         duration=self.getTimePassed()
         sec=duration%60
         duration/=60
-        min=duration%60
+        mins=duration%60
         hour=duration/60
-        return f"{hour},{min},{sec}"
+        return f"{int(hour)},{int(mins)},{int(sec)}"
 class CustomLogger():
     def __init__(self,log_file:str,) -> None:
         self.time_counter=CustomTimeCount()
         self.log_path=log_file
-    def log(self,log_header:str,log_str:str,to_stdout:bool=False):
-        output=f"[{log_header},{self.time_counter.getTimePassedAsStr()}]: {log_str}"
-        with open(self.log_path, 'w') as f:
+    def log(self,log_header:str,log_str:str,to_stdout:bool=True):
+        output=f"[{log_header}({self.time_counter.getTimePassedAsStr()})]: {log_str}"
+        with open(self.log_path, 'a') as f:
             f.write(output)
+            f.write("\n")
         if to_stdout:
             print(output)

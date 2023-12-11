@@ -1,158 +1,57 @@
+import argparse
 import json
 import copy
+import os
+import torch
 from torch.utils.data import IterableDataset
 import numpy as np
 import random
 import sys
 from multiprocessing import Queue, Process
-def evaluate(model, dataset,num_sessions,item_num, args):
 
-    NDCG = 0.0
-    HT = 0.0
-    valid_session = 0.0
-    if num_sessions>1000:
-        sessionIndexes = sorted(random.sample(range(0, num_sessions), 1000))
+
+def str2bool(s):
+    if s not in {'false', 'true'}:
+        raise ValueError('Not a valid boolean string')
+    return s == 'true'
+# def parseArgs():
+#     parser = argparse.ArgumentParser()
+#     parser.add_argument('--dataset', required=True)
+#     parser.add_argument('--train_dir', required=True)
+#     parser.add_argument('--batch_size', default=128, type=int)
+#     parser.add_argument('--lr', default=0.001, type=float)
+#     parser.add_argument('--max_len', default=50, type=int)
+#     parser.add_argument('--hidden_size', default=50, type=int)
+#     parser.add_argument('--num_blocks', default=2, type=int)
+#     parser.add_argument('--num_epochs', default=201, type=int)
+#     parser.add_argument('--num_heads', default=1, type=int)
+#     parser.add_argument('--dropout_rate', default=0.5, type=float)
+#     parser.add_argument('--l2_emb', default=0.0, type=float)
+#     parser.add_argument('--device', default='cpu', type=str)
+#     parser.add_argument('--inference_only', default=False, type=str2bool)
+#     parser.add_argument('--shuffle', default=True, type=str2bool)
+#     parser.add_argument('--state_dict_path', default=None, type=str)
+#     parser.add_argument('--stats_file', required=True, type=str)
+#     parser.add_argument('--num_batch', default=5000, type=int)
+#     args = parser.parse_args()
+#     if not os.path.isdir(args.train_dir):
+#         os.makedirs(args.train_dir)
+#     with open(os.path.join(args.train_dir, 'args.json'), 'w') as f:
+#         f.write(json.dumps(vars(args)))
+#         print(f"Writing args.json to {args.train_dir}.")
+#     print("Args parsed sucessfully!")
+#     return args
+def getNumBatch(dataset_len:int,batch_size:int,max_iter:int=-1):
+    num_batch=int(dataset_len/batch_size)
+    if max_iter==-1:
+        return num_batch
+    if num_batch<max_iter:
+        print("Num_batch is smaller than args.max_iter. Using num_batch in place of max_iter")
     else:
-        sessionIndexes = range(0, num_sessions)
-    for si in sessionIndexes:
-        train,valid,test=dataset[si]
-        if len(train) < 1 or len(test) < 1: continue
-
-        seq = np.zeros([args.maxlen], dtype=np.int32)
-        idx = args.maxlen - 1
-        
-        seq[idx] = valid[0]
-        idx -= 1
-        for i in reversed(train):
-            seq[idx] = i
-            idx -= 1
-            if idx == -1: break
-        rated = set(train)
-        rated.add(0)
-        item_idx = [test[0]]
-        for _ in range(100):
-            t = np.random.randint(1, item_num + 1)
-            while t in rated: t = np.random.randint(1, item_num + 1)
-            item_idx.append(t)
-
-        predictions = -model.predict(*[np.array(l) for l in [[seq],item_idx]])
-        predictions = predictions[0]
-
-        rank = predictions.argsort().argsort()[0].item()
-
-        valid_session += 1
-
-        if rank < 10:
-            NDCG += 1 / np.log2(rank + 2)
-            HT += 1
-        if valid_session % 100 == 0:
-            print('.',end='')
-            sys.stdout.flush()
-
-    return NDCG / valid_session, HT / valid_session
-def evaluate_valid(model, dataset:IterableDataset, num_sessions,item_num, args):
-
-    NDCG = 0.0
-    HT = 0.0
-    valid_session = 0.0
-
-    if num_sessions>1000:
-        sessionIndexes = sorted(random.sample(range(0, num_sessions), 1000))
-    else:
-        sessionIndexes = range(0, num_sessions)
-    for si in sessionIndexes:
-        train,valid,test=dataset[si]
-        if len(train) < 1 or len(valid) < 1: continue
-
-        seq = np.zeros([args.maxlen], dtype=np.int32)
-        idx = args.maxlen - 1
-        for i in reversed(train):
-            seq[idx] = i
-            idx -= 1
-            if idx == -1: break
-        rated = set(train)
-        rated.add(0)
-        item_idx = [valid[0]]
-        for _ in range(100):
-            t = np.random.randint(1, item_num + 1)
-            while t in rated: t = np.random.randint(1, item_num + 1)
-            item_idx.append(t)
-
-        predictions = -model.predict(*[np.array(l) for l in [[seq], item_idx]])
-        predictions = predictions[0] 
-
-        rank = predictions.argsort().argsort()[0].item()
-
-        valid_session += 1
-
-        if rank < 10:
-            NDCG += 1 / np.log2(rank + 2)
-            HT += 1
-        if valid_session % 100 == 0:
-            print('.', end="")
-            sys.stdout.flush()
-
-    return NDCG / valid_session, HT / valid_session
-
-
-def random_neq(l, r, s):
-    t = np.random.randint(l, r)
-    while t in s:
-        t = np.random.randint(l, r)
-    return t
-
-
-def sample_function(dataset:IterableDataset, sessionnum, itemnum, batch_size, maxlen, result_queue, SEED):
-    def sample():
-
-        session = np.random.randint(1, sessionnum + 1)
-        dataset_session=dataset[session][0]
-        seq = np.zeros([maxlen], dtype=np.int32)
-        pos = np.zeros([maxlen], dtype=np.int32)
-        neg = np.zeros([maxlen], dtype=np.int32)
-
-        nxt = dataset_session[-1]
-        idx = maxlen - 1
-
-        ts = set(dataset_session)
-        for i in reversed(dataset_session[:-1]):
-            seq[idx] = i
-            pos[idx] = nxt
-            if nxt != 0: neg[idx] = random_neq(1, itemnum + 1, ts)
-            nxt = i
-            idx -= 1
-            if idx == -1: break
-
-        return (session, seq, pos, neg)
-
-    np.random.seed(SEED)
-    while True:
-        one_batch = []
-        for i in range(batch_size):
-            one_batch.append(sample())
-
-        result_queue.put(zip(*one_batch))
-class WarpSampler(object):
-    def __init__(self, dataset, sessionnum, itemnum, batch_size=64, maxlen=10, n_workers=1):
-        self.result_queue = Queue(maxsize=n_workers * 10)
-        self.processors = []
-        for i in range(n_workers):
-            self.processors.append(
-                Process(target=sample_function, args=(dataset,
-                                                      sessionnum,
-                                                      itemnum,
-                                                      batch_size,
-                                                      maxlen,
-                                                      self.result_queue,
-                                                      np.random.randint(int(2e9))
-                                                      )))
-            self.processors[-1].daemon = True
-            self.processors[-1].start()
-
-    def next_batch(self):
-        return self.result_queue.get()
-
-    def close(self):
-        for p in self.processors:
-            p.terminate()
-            p.join()
+        num_batch=max_iter
+    return num_batch
+def saveModel(model:torch.nn.Module,epoch,args):
+    with open(os.path.join(args.train_dir, 'save.json'), 'w') as f:
+        f.write(json.dumps({"epoch":epoch}))
+    torch.save(model.state_dict(), os.path.join(args.train_dir, "latest.pth"))
+    print(f"Epoch {epoch} saved----------------")
